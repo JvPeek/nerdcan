@@ -29,7 +29,7 @@ func newForm(id, dlc, cycleTime, data string) form {
 	}
 
 	inputs[0].Placeholder = "1A"
-	inputs[0].CharLimit = 3
+	inputs[0].CharLimit = 10
 	inputs[0].Width = 5
 	if id != "" {
 		inputs[0].SetValue(id)

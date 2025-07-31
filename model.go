@@ -145,7 +145,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					selectedRow := m.sendTable.SelectedRow()
 					if selectedRow != nil {
 						// UUID is the first column (index 0)
-						id := selectedRow[2] // ID is the third column (index 2)
+						id := strings.TrimPrefix(selectedRow[2], "0x") // ID is the third column (index 2)
 						dlc := selectedRow[3] // DLC is the fourth column (index 3)
 						cycleTime := selectedRow[4] // Cycle Time is the fifth column (index 4)
 						data := selectedRow[5] // Data is the sixth column (index 5)

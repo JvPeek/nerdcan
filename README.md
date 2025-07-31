@@ -42,10 +42,19 @@ NerdCAN provides a clean, interactive command-line interface for sending and rec
 
 2.  **Build the application:**
     ```bash
-    go build .
+    make build
     ```
 
-    This will create an executable named `nerdcan` (or `nerdcan.exe` on Windows) in your current directory.
+    This will create an executable named `nerdcan` in the `bin/` directory.
+
+    *Note: The `ascii.txt` file is embedded directly into the binary, so you don't need to worry about it being present in the filesystem after building.*
+
+3.  **Install the application (optional):**
+    ```bash
+    sudo make install
+    ```
+
+    This will copy the `nerdcan` executable to `/usr/local/bin`, making it accessible from anywhere in your terminal.
 
 ## Usage
 

@@ -178,6 +178,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						}
 						m.sendMessages = newSendMessages
 						m.updateSendTable()
+						saveMessages(m.sendMessages)
 					}
 				}
 				return m, nil
@@ -199,6 +200,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				m.sendMessages = []*SendMessage{} // Clear all messages
 				m.updateSendTable()
+				saveMessages(m.sendMessages)
 				return m, nil
 			case " ":
 				if m.focus == FocusBottom {

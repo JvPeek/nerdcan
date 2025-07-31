@@ -85,7 +85,3 @@ To run NerdCAN, simply execute the built binary:
 ## Contributing
 
 Contributions are welcome! Feel free to open issues or submit pull requests.
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details. (Note: You might need to create a LICENSE file if you haven't already.)

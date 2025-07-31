@@ -231,7 +231,7 @@ func (m Model) View() string {
 		return m.renderHelpView()
 	}
 
-	header := headerStyle.Render("nerdcan")
+	header := headerStyle.Width(m.width).Render("NerdCAN")
 	statusBar := m.renderStatusBar()
 
 	topPaneStyle := inactiveBorderStyle
@@ -253,7 +253,7 @@ func (m Model) View() string {
 
 func (m *Model) renderHelpView() string {
 	var helpBuilder strings.Builder
-	helpBuilder.WriteString(lipgloss.NewStyle().Bold(true).Render("GENERAL") + "\n")
+	helpBuilder.WriteString(lipgloss.NewStyle().Bold(true).Render(NerdCANASCII) + "\n")
 	helpBuilder.WriteString(" q: quit\n")
 	helpBuilder.WriteString(" ?: toggle help\n\n")
 
@@ -270,7 +270,7 @@ func (m *Model) renderHelpView() string {
 	helpBuilder.WriteString(" esc: stop all cyclic messages\n")
 	helpBuilder.WriteString(" tab: switch focus\n")
 
-	helpBox := popupStyle.Width(40).Render(helpBuilder.String())
+	helpBox := popupStyle.Width(76).Render(helpBuilder.String())
 
 	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, helpBox)
 }

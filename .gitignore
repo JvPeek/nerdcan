@@ -7,3 +7,4 @@ nerdcan
 # IDE-specific files
 .vscode/
 .idea/
+messages.json

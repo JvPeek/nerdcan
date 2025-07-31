@@ -533,7 +533,12 @@ func (m *Model) sendMessageToRow(msg *SendMessage) table.Row {
 		indicator,
 		fmt.Sprintf("0x%03X", msg.ID),
 		fmt.Sprintf("%d", msg.DLC),
-		fmt.Sprintf("%v", msg.CycleTime),
+		func() string {
+			if msg.CycleTime == 0 {
+				return ""
+			}
+			return fmt.Sprintf("%v", msg.CycleTime)
+		}(),
 		dataStr,
 		msg.TriggerType,
 	}

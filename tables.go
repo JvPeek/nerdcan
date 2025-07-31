@@ -35,6 +35,7 @@ func newSendTable() table.Model {
 		{Title: "DLC", Width: 4},
 		{Title: "Cycle Time", Width: 14},
 		{Title: "Data", Width: 24},
+		{Title: "Trigger", Width: 10},
 	}
 
 	sendTable := table.New(

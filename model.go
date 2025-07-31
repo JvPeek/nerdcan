@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
@@ -24,6 +25,14 @@ const (
 
 const infoPanelWidth = 30
 
+type InfoPanelTickMsg time.Time
+
+func infoPanelTickCmd() tea.Cmd {
+	return tea.Tick(time.Second, func(t time.Time) tea.Msg {
+		return InfoPanelTickMsg(t)
+	})
+}
+
 // Model is the main model for the Bubble Tea application.
 
 type Model struct {
@@ -38,13 +47,15 @@ type Model struct {
 	focus         int
 	form          form
 	showHelp      bool
+	showInfo      bool
+	infoPanel     info
 }
 
-func initialModel() Model {
+func initialModel(messages []*SendMessage) Model {
 	receiveTable := newReceiveTable()
 	sendTable := newSendTable()
 
-	return Model{
+	model := Model{
 		receiveTable:  receiveTable,
 		sendTable:     sendTable,
 		canMessages:   make(map[uint32]CANMessage),
@@ -53,7 +64,13 @@ func initialModel() Model {
 		focus:         FocusTop,
 		form:          newForm("", "", "", ""),
 		showHelp:      false,
+		showInfo:      false,
+		infoPanel:     newInfo(),
+		sendMessages:  messages,
 	}
+
+	model.updateSendTable()
+	return model
 }
 
 func (m Model) Init() tea.Cmd {
@@ -62,6 +79,7 @@ func (m Model) Init() tea.Cmd {
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
+
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		if m.form.focused > -1 {
@@ -147,7 +165,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						// UUID is the first column (index 0)
 						id := strings.TrimPrefix(selectedRow[2], "0x") // ID is the third column (index 2)
 						dlc := selectedRow[3] // DLC is the fourth column (index 3)
-						cycleTime := selectedRow[4] // Cycle Time is the fifth column (index 4)
+						cycleTime := strings.TrimSuffix(selectedRow[4], "ms") // Cycle Time is the fifth column (index 4)
 						data := selectedRow[5] // Data is the sixth column (index 5)
 
 						m.form = newForm(id, dlc, cycleTime, data) // Populate form for editing
@@ -202,7 +220,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.updateSendTable()
 				saveMessages(m.sendMessages)
 				return m, nil
-			case " ":
+			case "i":
+				m.showInfo = !m.showInfo
+				if m.showInfo {
+					go m.infoPanel.startBusLoadMonitor() // Start the bus load monitor goroutine
+					m.infoPanel.updateInfo()
+					return m, infoPanelTickCmd()
+				} else {
+					// Stop the bus load monitor goroutine
+					close(m.infoPanel.stopChan)
+					// Re-initialize the stop channel for the next time it's opened
+					m.infoPanel.stopChan = make(chan struct{})
+				}
+				return m, nil
+			case " ": // Spacebar to send message
 				if m.focus == FocusBottom {
 					selectedRow := m.sendTable.SelectedRow()
 					if selectedRow != nil {
@@ -224,6 +255,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 		}
+	case InfoPanelTickMsg:
+		if m.showInfo {
+			m.infoPanel.updateInfo()
+			return m, infoPanelTickCmd()
+		}
+		return m, nil
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
@@ -288,6 +325,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+
 func (m *Model) updateLayout() {
 	mainViewHeight := m.height - 2 // For header and footer
 	topPaneHeight := mainViewHeight / 2
@@ -307,6 +345,10 @@ func (m Model) View() string {
 
 	if m.showHelp {
 		return m.renderHelpView()
+	}
+
+	if m.showInfo {
+		return m.infoPanel.View(m)
 	}
 
 	header := headerStyle.Width(m.width).Render("NerdCAN")
@@ -346,6 +388,7 @@ func (m *Model) renderHelpView() string {
 	addLine("")
 	addLine(" q: quit")
 	addLine(" ?: toggle help")
+	addLine(" i: toggle info panel")
 	addLine("")
 
 	addLine(lipgloss.NewStyle().Bold(true).Render("RECEIVE PANE"))
@@ -363,8 +406,8 @@ func (m *Model) renderHelpView() string {
 	addLine(" space: send selected message")
 	addLine(" ctrl+s: save messages")
 	addLine(" ctrl+l: load messages")
-	addLine(" ctrl+d: clear all messages")
-	addLine(" ctrl+d: clear all messages")
+		addLine(" ctrl+d: clear all messages")
+	addLine(" i: toggle info panel")
 	addLine(" esc: stop all cyclic messages")
 	addLine(" tab: switch focus")
 
@@ -458,5 +501,6 @@ func (m *Model) sendMessageToRow(msg *SendMessage) table.Row {
 		fmt.Sprintf("%d", msg.DLC),
 		fmt.Sprintf("%v", msg.CycleTime),
 		dataStr,
+		msg.TriggerType,
 	}
 }

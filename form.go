@@ -102,7 +102,7 @@ func updateForm(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.form.editingUUID = "" // Clear editing state
 			} else {
 				// Create new message
-				m.sendMessages = append(m.sendMessages, &SendMessage{UUID: uuid.New(), ID: uint32(id), DLC: uint8(dlc), CycleTime: cycle, Data: data, done: make(chan bool)})
+				m.sendMessages = append(m.sendMessages, &SendMessage{UUID: uuid.New(), ID: uint32(id), DLC: uint8(dlc), CycleTime: cycle, Data: data, TriggerType: "", done: make(chan bool)})
 			}
 			m.updateSendTable()
 			saveMessages(m.sendMessages)

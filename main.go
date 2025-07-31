@@ -12,7 +12,13 @@ import (
 func main() {
 	go listenForCANCtrl()
 
-	p := tea.NewProgram(initialModel(), tea.WithAltScreen(), tea.WithMouseAllMotion())
+	messages, err := loadMessages()
+	if err != nil {
+		fmt.Printf("Error loading messages: %v", err)
+		os.Exit(1)
+	}
+
+	p := tea.NewProgram(initialModel(messages), tea.WithAltScreen(), tea.WithMouseAllMotion())
 	if err := p.Start(); err != nil {
 		fmt.Printf("Alas, there's been an error: %v", err)
 		os.Exit(1)

@@ -27,6 +27,7 @@ type SendMessage struct {
 	CycleTime time.Duration
 	Data      []byte
 	Sending   bool
+	TriggerType string // "manual" or "timer"
 	ticker    *time.Ticker
 	done      chan bool
 }
@@ -55,6 +56,7 @@ func waitForCANMessage() tea.Msg {
 }
 
 func sendOnce(msg *SendMessage) {
+	msg.TriggerType = "manual"
 	conn, err := socketcan.DialContext(context.Background(), "can", "can0")
 	if err != nil {
 		return
@@ -67,6 +69,7 @@ func sendOnce(msg *SendMessage) {
 }
 
 func sendCyclic(msg *SendMessage) {
+	msg.TriggerType = "timer"
 	conn, err := socketcan.DialContext(context.Background(), "can", "can0")
 	if err != nil {
 		return

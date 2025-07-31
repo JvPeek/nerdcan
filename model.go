@@ -95,6 +95,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return m, nil
 			case "esc":
+				if m.showHelp {
+					m.showHelp = false
+					return m, nil
+				}
 				m.canMessages = make(map[uint32]CANMessage)
 				m.receiveTable.SetRows([]table.Row{})
 				for _, msg := range m.sendMessages {
@@ -253,24 +257,41 @@ func (m Model) View() string {
 
 func (m *Model) renderHelpView() string {
 	var helpBuilder strings.Builder
-	helpBuilder.WriteString(lipgloss.NewStyle().Bold(true).Render(NerdCANASCII) + "\n")
-	helpBuilder.WriteString(" q: quit\n")
-	helpBuilder.WriteString(" ?: toggle help\n\n")
+	maxWidth := 0
 
-	helpBuilder.WriteString(lipgloss.NewStyle().Bold(true).Render("RECEIVE PANE") + "\n")
-	helpBuilder.WriteString(" o: toggle mode (overwrite/log)\n")
-	helpBuilder.WriteString(" f: cycle filter mode\n")
-	helpBuilder.WriteString(" F: add/remove selected ID to filter\n")
-	helpBuilder.WriteString(" esc: clear all received messages\n")
-	helpBuilder.WriteString(" tab: switch focus\n\n")
+	// Helper function to add a line and update maxWidth
+	addLine := func(s string) {
+		helpBuilder.WriteString(s + "\n")
+		currentWidth := lipgloss.Width(s)
+		if currentWidth > maxWidth {
+			maxWidth = currentWidth
+		}
+	}
 
-	helpBuilder.WriteString(lipgloss.NewStyle().Bold(true).Render("SEND PANE") + "\n")
-	helpBuilder.WriteString(" n: create new message\n")
-	helpBuilder.WriteString(" space: send selected message\n")
-	helpBuilder.WriteString(" esc: stop all cyclic messages\n")
-	helpBuilder.WriteString(" tab: switch focus\n")
+	addLine(lipgloss.NewStyle().Bold(true).Render(NerdCANASCII))
+	addLine("")
+	addLine(" q: quit")
+	addLine(" ?: toggle help")
+	addLine("")
 
-	helpBox := popupStyle.Width(76).Render(helpBuilder.String())
+	addLine(lipgloss.NewStyle().Bold(true).Render("RECEIVE PANE"))
+	addLine(" o: toggle mode (overwrite/log)")
+	addLine(" f: cycle filter mode")
+	addLine(" F: add/remove selected ID to filter")
+	addLine(" esc: clear all received messages")
+	addLine(" tab: switch focus")
+	addLine("")
+
+	addLine(lipgloss.NewStyle().Bold(true).Render("SEND PANE"))
+	addLine(" n: create new message")
+	addLine(" space: send selected message")
+	addLine(" esc: stop all cyclic messages")
+	addLine(" tab: switch focus")
+
+	// Add padding for the border
+	helpBoxWidth := maxWidth + popupStyle.GetHorizontalPadding() + popupStyle.GetHorizontalBorderSize()
+
+	helpBox := popupStyle.Width(helpBoxWidth).Render(helpBuilder.String())
 
 	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, helpBox)
 }

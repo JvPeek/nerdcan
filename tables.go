@@ -7,7 +7,7 @@ import (
 
 func newReceiveTable() table.Model {
 	receiveColumns := []table.Column{
-		{Title: "", Width: 2},
+		{Title: "", Width: 3},
 		{Title: "ID", Width: 8},
 		{Title: "DLC", Width: 4},
 		{Title: "Cycle Time", Width: 14},

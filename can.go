@@ -16,6 +16,8 @@ type CANMessage struct {
 	Frame     can.Frame
 	Timestamp time.Time
 	CycleTime time.Duration
+	Direction string // "RX" or "TX"
+	SentByApp bool   // True if this message was sent by the application
 }
 
 // SendMessage holds a custom CAN message to be sent.
@@ -46,7 +48,7 @@ func listenForCANCtrl() {
 	receiver := socketcan.NewReceiver(conn)
 	for {
 		if receiver.Receive() {
-			canMsgCh <- CANMessage{Frame: receiver.Frame(), Timestamp: time.Now()}
+			canMsgCh <- CANMessage{Frame: receiver.Frame(), Timestamp: time.Now(), Direction: "RX", SentByApp: false}
 		}
 	}
 }
@@ -66,6 +68,7 @@ func sendOnce(msg *SendMessage) {
 	tx := socketcan.NewTransmitter(conn)
 	frame := can.Frame{ID: msg.ID, Length: msg.DLC, Data: can.Data(msg.Data)}
 	_ = tx.TransmitFrame(context.Background(), frame)
+	canMsgCh <- CANMessage{Frame: frame, Timestamp: time.Now(), Direction: "TX", SentByApp: true, CycleTime: 0}
 }
 
 func sendCyclic(msg *SendMessage) {
@@ -84,9 +87,11 @@ func sendCyclic(msg *SendMessage) {
 		select {
 		case <-msg.ticker.C:
 			_ = tx.TransmitFrame(context.Background(), frame)
+			canMsgCh <- CANMessage{Frame: frame, Timestamp: time.Now(), Direction: "TX", SentByApp: true, CycleTime: msg.CycleTime}
 		case <-msg.done:
 			msg.ticker.Stop()
 			return
 		}
 	}
 }
+

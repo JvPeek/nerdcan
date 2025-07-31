@@ -266,11 +266,25 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		m.updateLayout()
 	case CANMessage:
+		if msg.Direction == "RX" && m.canMessages[msg.Frame.ID].SentByApp {
+			return m, waitForCANMessage // Ignore echoed message
+		}
+
+		// Create a new CANMessage to store, copying relevant fields
+		msgToStore := msg
+
 		prevMsg, exists := m.canMessages[msg.Frame.ID]
 		if exists {
-			msg.CycleTime = msg.Timestamp.Sub(prevMsg.Timestamp)
+			// Only calculate cycle time for received messages
+			if !msgToStore.SentByApp {
+				msgToStore.CycleTime = msg.Timestamp.Sub(prevMsg.Timestamp)
+			}
+			// Preserve SentByApp status if it was previously true
+			if prevMsg.SentByApp {
+				msgToStore.SentByApp = true
+			}
 		}
-		m.canMessages[msg.Frame.ID] = msg
+		m.canMessages[msg.Frame.ID] = msgToStore
 
 		switch m.filterMode {
 		case FilterModeWhitelist:
@@ -307,9 +321,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				rows = append(rows, m.canMessageToRow(m.canMessages[id]))
 			}
 		} else {
-			rows = m.receiveTable.Rows()
-			rows = append(rows, m.canMessageToRow(msg))
-			m.receiveTable.GotoBottom()
+			// In log mode, add message to table if it's a new received message
+			// or a message sent by the app. Filter out echoed messages.
+			shouldAdd := true
+			if !msgToStore.SentByApp { // If it's a received message
+				if existingMsg, ok := m.canMessages[msg.Frame.ID]; ok && existingMsg.SentByApp {
+					// If there's an existing message with the same ID that was sent by the app,
+					// and this is a received message, then it's an echo. Don't add it.
+					shouldAdd = false
+				}
+			}
+
+			if shouldAdd {
+				rows = m.receiveTable.Rows()
+				rows = append(rows, m.canMessageToRow(msgToStore))
+				m.receiveTable.GotoBottom()
+			}
 		}
 		m.receiveTable.SetRows(rows)
 		return m, waitForCANMessage
@@ -466,8 +493,15 @@ func (m *Model) canMessageToRow(msg CANMessage) table.Row {
 		indicator = "• "
 	}
 
+	directionIcon := ""
+	if msg.Direction == "TX" {
+		directionIcon = "▲"
+	} else {
+		directionIcon = "▼"
+	}
+
 	return table.Row{
-		indicator,
+		fmt.Sprintf("%s%s", indicator, directionIcon),
 		fmt.Sprintf("0x%03X", msg.Frame.ID),
 		fmt.Sprintf("%d", msg.Frame.Length),
 		fmt.Sprintf("%.3fms", cycleTimeMs),

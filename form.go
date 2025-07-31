@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/google/uuid"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -17,9 +18,10 @@ import (
 type form struct {
 	inputs  []textinput.Model
 	focused int
+	editingUUID string
 }
 
-func newForm() form {
+func newForm(id, dlc, cycleTime, data string) form {
 	inputs := make([]textinput.Model, 11)
 	for i := range inputs {
 		inputs[i] = textinput.New()
@@ -29,18 +31,31 @@ func newForm() form {
 	inputs[0].Placeholder = "1A"
 	inputs[0].CharLimit = 3
 	inputs[0].Width = 5
+	if id != "" {
+		inputs[0].SetValue(id)
+	}
 
 	inputs[1].Placeholder = "8"
 	inputs[1].CharLimit = 1
 	inputs[1].Width = 3
+	if dlc != "" {
+		inputs[1].SetValue(dlc)
+	}
 
 	inputs[2].Placeholder = "100"
 	inputs[2].CharLimit = 5
 	inputs[2].Width = 7
+	if cycleTime != "" {
+		inputs[2].SetValue(cycleTime)
+	}
 
-	for i := 3; i < 11; i++ {
-		inputs[i].CharLimit = 2
-		inputs[i].Width = 3
+	dataBytes := strings.Fields(data)
+	for i := 0; i < 8; i++ {
+		inputs[i+3].CharLimit = 2
+		inputs[i+3].Width = 3
+		if i < len(dataBytes) {
+			inputs[i+3].SetValue(dataBytes[i])
+		}
 	}
 
 	return form{inputs: inputs, focused: -1}
@@ -72,7 +87,23 @@ func updateForm(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 					data[i] = b[0]
 				}
 			}
-			m.sendMessages = append(m.sendMessages, &SendMessage{ID: uint32(id), DLC: uint8(dlc), CycleTime: cycle, Data: data, done: make(chan bool)})
+
+			if m.form.editingUUID != "" {
+				// Update existing message
+				for i, msg := range m.sendMessages {
+					if msg.UUID.String() == m.form.editingUUID {
+						m.sendMessages[i].ID = uint32(id)
+						m.sendMessages[i].DLC = uint8(dlc)
+						m.sendMessages[i].CycleTime = cycle
+						m.sendMessages[i].Data = data
+						break
+					}
+				}
+				m.form.editingUUID = "" // Clear editing state
+			} else {
+				// Create new message
+				m.sendMessages = append(m.sendMessages, &SendMessage{UUID: uuid.New(), ID: uint32(id), DLC: uint8(dlc), CycleTime: cycle, Data: data, done: make(chan bool)})
+			}
 			m.updateSendTable()
 			m.form.focused = -1
 			return m, nil

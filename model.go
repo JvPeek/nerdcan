@@ -51,7 +51,7 @@ func initialModel() Model {
 		filteredIDs:   make(map[uint32]struct{}),
 		overwriteMode: true, // Default to overwrite mode
 		focus:         FocusTop,
-		form:          newForm(),
+		form:          newForm("", "", "", ""),
 		showHelp:      false,
 	}
 }
@@ -122,11 +122,83 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return m, nil
 			case "n":
+				var id, dlc, cycleTime, data string
+				if m.focus == FocusTop {
+					selectedRow := m.receiveTable.SelectedRow()
+					if selectedRow != nil {
+						id = strings.TrimPrefix(selectedRow[1], "0x") // ID
+						dlc = selectedRow[2] // DLC
+						// Remove "ms" from cycle time string
+						cycleTime = strings.TrimSuffix(selectedRow[3], "ms") // Cycle Time
+						data = selectedRow[4] // Data
+					}
+				}
+				m.form = newForm(id, dlc, cycleTime, data) // Always start with a fresh form
 				m.form.focused = 0
 				for i := range m.form.inputs {
 					m.form.inputs[i].Blur()
 				}
 				m.form.inputs[0].Focus()
+				return m, nil
+			case "e":
+				if m.focus == FocusBottom {
+					selectedRow := m.sendTable.SelectedRow()
+					if selectedRow != nil {
+						// UUID is the first column (index 0)
+						id := selectedRow[2] // ID is the third column (index 2)
+						dlc := selectedRow[3] // DLC is the fourth column (index 3)
+						cycleTime := selectedRow[4] // Cycle Time is the fifth column (index 4)
+						data := selectedRow[5] // Data is the sixth column (index 5)
+
+						m.form = newForm(id, dlc, cycleTime, data) // Populate form for editing
+						m.form.editingUUID = selectedRow[0] // Store UUID for update
+						m.form.focused = 0
+						for i := range m.form.inputs {
+							m.form.inputs[i].Blur()
+						}
+						m.form.inputs[0].Focus()
+						return m, nil
+					}
+				}
+				return m, nil
+			case "d":
+				if m.focus == FocusBottom {
+					selectedRow := m.sendTable.SelectedRow()
+					if selectedRow != nil {
+						selectedUUID := selectedRow[0] // UUID is the first column
+						newSendMessages := []*SendMessage{}
+						for _, msg := range m.sendMessages {
+							if msg.UUID.String() != selectedUUID {
+								newSendMessages = append(newSendMessages, msg)
+							} else {
+								if msg.Sending {
+									msg.done <- true // Stop cyclic sending if active
+								}
+							}
+						}
+						m.sendMessages = newSendMessages
+						m.updateSendTable()
+					}
+				}
+				return m, nil
+			case "ctrl+s":
+				saveMessages(m.sendMessages)
+				return m, nil
+			case "ctrl+l":
+				loadedMessages, err := loadMessages()
+				if err == nil {
+					m.sendMessages = loadedMessages
+					m.updateSendTable()
+				}
+				return m, nil
+			case "ctrl+d":
+				for _, msg := range m.sendMessages {
+					if msg.Sending {
+						msg.done <- true // Stop cyclic sending if active
+					}
+				}
+				m.sendMessages = []*SendMessage{} // Clear all messages
+				m.updateSendTable()
 				return m, nil
 			case " ":
 				if m.focus == FocusBottom {
@@ -284,7 +356,13 @@ func (m *Model) renderHelpView() string {
 
 	addLine(lipgloss.NewStyle().Bold(true).Render("SEND PANE"))
 	addLine(" n: create new message")
+	addLine(" e: edit selected message")
+	addLine(" d: delete selected message")
 	addLine(" space: send selected message")
+	addLine(" ctrl+s: save messages")
+	addLine(" ctrl+l: load messages")
+	addLine(" ctrl+d: clear all messages")
+	addLine(" ctrl+d: clear all messages")
 	addLine(" esc: stop all cyclic messages")
 	addLine(" tab: switch focus")
 
@@ -366,11 +444,17 @@ func (m *Model) sendMessageToRow(msg *SendMessage) table.Row {
 	if msg.Sending {
 		indicator = "> "
 	}
+	dataBytes := make([]string, len(msg.Data))
+	for i, b := range msg.Data {
+		dataBytes[i] = fmt.Sprintf("%02X", b)
+	}
+	dataStr := strings.Join(dataBytes, " ")
 	return table.Row{
+		msg.UUID.String(),
 		indicator,
 		fmt.Sprintf("0x%03X", msg.ID),
 		fmt.Sprintf("%d", msg.DLC),
 		fmt.Sprintf("%v", msg.CycleTime),
-		fmt.Sprintf("%X", msg.Data),
+		dataStr,
 	}
 }

@@ -29,6 +29,7 @@ func newReceiveTable() table.Model {
 
 func newSendTable() table.Model {
 	sendColumns := []table.Column{
+		{Title: "UUID", Width: 0},
 		{Title: "", Width: 3},
 		{Title: "ID", Width: 8},
 		{Title: "DLC", Width: 4},

@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/google/uuid"
 	"go.einride.tech/can"
 	"go.einride.tech/can/pkg/socketcan"
 	tea "github.com/charmbracelet/bubbletea"
@@ -20,6 +21,7 @@ type CANMessage struct {
 // SendMessage holds a custom CAN message to be sent.
 
 type SendMessage struct {
+	UUID      uuid.UUID
 	ID        uint32
 	DLC       uint8
 	CycleTime time.Duration

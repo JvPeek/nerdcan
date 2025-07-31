@@ -37,6 +37,7 @@ type Model struct {
 	filteredIDs   map[uint32]struct{}
 	focus         int
 	form          form
+	showHelp      bool
 }
 
 func initialModel() Model {
@@ -51,6 +52,7 @@ func initialModel() Model {
 		overwriteMode: true, // Default to overwrite mode
 		focus:         FocusTop,
 		form:          newForm(),
+		showHelp:      false,
 	}
 }
 
@@ -68,6 +70,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch msg.String() {
 			case "q", "ctrl+c":
 				return m, tea.Quit
+			case "?":
+				m.showHelp = !m.showHelp
+				return m, nil
 			case "o":
 				m.overwriteMode = !m.overwriteMode
 				return m, nil
@@ -209,13 +214,12 @@ func (m *Model) updateLayout() {
 	mainViewHeight := m.height - 2 // For header and footer
 	topPaneHeight := mainViewHeight / 2
 	bottomPaneHeight := mainViewHeight - topPaneHeight
-	tableWidth := m.width - infoPanelWidth - 4
+	tableWidth := m.width - 2
 
 	m.receiveTable.SetWidth(tableWidth)
 	m.receiveTable.SetHeight(topPaneHeight - 2)
 	m.sendTable.SetWidth(tableWidth)
 	m.sendTable.SetHeight(bottomPaneHeight - 2)
-	infoStyle.Height(mainViewHeight - 2)
 }
 
 func (m Model) View() string {
@@ -223,11 +227,12 @@ func (m Model) View() string {
 		return m.form.View(m)
 	}
 
-	header := headerStyle.Render("nerdcan")
-	footerText := "q: quit | o: mode | f: filter | F: add/rm filter | esc: clear | tab: focus | n: new msg | space: send"
-	footer := footerStyle.Width(m.width).Render(footerText)
+	if m.showHelp {
+		return m.renderHelpView()
+	}
 
-	infoPanel := infoStyle.Render(m.renderInfoPanel())
+	header := headerStyle.Render("nerdcan")
+	statusBar := m.renderStatusBar()
 
 	topPaneStyle := inactiveBorderStyle
 	bottomPaneStyle := inactiveBorderStyle
@@ -238,21 +243,39 @@ func (m Model) View() string {
 		bottomPaneStyle = activeBorderStyle
 	}
 
-	topPane := topPaneStyle.Width(m.width - infoPanelWidth - 2).Render(m.receiveTable.View())
-	bottomPane := bottomPaneStyle.Width(m.width - infoPanelWidth - 2).Render(m.sendTable.View())
+	topPane := topPaneStyle.Width(m.width - 2).Render(m.receiveTable.View())
+	bottomPane := bottomPaneStyle.Width(m.width - 2).Render(m.sendTable.View())
 
-	leftPanes := lipgloss.JoinVertical(lipgloss.Left, topPane, bottomPane)
+	mainView := lipgloss.JoinVertical(lipgloss.Left, topPane, bottomPane)
 
-	mainView := lipgloss.JoinHorizontal(
-		lipgloss.Top,
-		leftPanes,
-		infoPanel,
-	)
-
-	return lipgloss.JoinVertical(lipgloss.Left, header, mainView, footer)
+	return lipgloss.JoinVertical(lipgloss.Left, header, mainView, statusBar)
 }
 
-func (m *Model) renderInfoPanel() string {
+func (m *Model) renderHelpView() string {
+	var helpBuilder strings.Builder
+	helpBuilder.WriteString(lipgloss.NewStyle().Bold(true).Render("GENERAL") + "\n")
+	helpBuilder.WriteString(" q: quit\n")
+	helpBuilder.WriteString(" ?: toggle help\n\n")
+
+	helpBuilder.WriteString(lipgloss.NewStyle().Bold(true).Render("RECEIVE PANE") + "\n")
+	helpBuilder.WriteString(" o: toggle mode (overwrite/log)\n")
+	helpBuilder.WriteString(" f: cycle filter mode\n")
+	helpBuilder.WriteString(" F: add/remove selected ID to filter\n")
+	helpBuilder.WriteString(" esc: clear all received messages\n")
+	helpBuilder.WriteString(" tab: switch focus\n\n")
+
+	helpBuilder.WriteString(lipgloss.NewStyle().Bold(true).Render("SEND PANE") + "\n")
+	helpBuilder.WriteString(" n: create new message\n")
+	helpBuilder.WriteString(" space: send selected message\n")
+	helpBuilder.WriteString(" esc: stop all cyclic messages\n")
+	helpBuilder.WriteString(" tab: switch focus\n")
+
+	helpBox := popupStyle.Width(40).Render(helpBuilder.String())
+
+	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, helpBox)
+}
+
+func (m *Model) renderStatusBar() string {
 	mode := "Log"
 	if m.overwriteMode {
 		mode = "Overwrite"
@@ -261,37 +284,30 @@ func (m *Model) renderInfoPanel() string {
 	var filterStatus string
 	switch m.filterMode {
 	case FilterModeOff:
-		filterStatus = lipgloss.NewStyle().Foreground(lipgloss.Color("1")).Render("Off")
+		filterStatus = "Off"
 	case FilterModeWhitelist:
-		filterStatus = lipgloss.NewStyle().Foreground(lipgloss.Color("2")).Render("Whitelist")
+		filterStatus = "Whitelist"
 	case FilterModeBlacklist:
-		filterStatus = lipgloss.NewStyle().Foreground(lipgloss.Color("3")).Render("Blacklist")
+		filterStatus = "Blacklist"
 	}
 
-	var idsBuilder strings.Builder
-	if len(m.filteredIDs) > 0 {
-		ids := make([]string, 0, len(m.filteredIDs))
-		for id := range m.filteredIDs {
-			ids = append(ids, fmt.Sprintf("0x%X", id))
-		}
-		sort.Strings(ids)
-		idsBuilder.WriteString(strings.Join(ids, ", "))
-	} else {
-		idsBuilder.WriteString("None")
+	statusLeft := fmt.Sprintf(" %s | %d msgs | Filter: %s", mode, len(m.canMessages), filterStatus)
+	statusRight := "? for help "
+
+	statusLeftWidth := lipgloss.Width(statusLeft)
+	statusRightWidth := lipgloss.Width(statusRight)
+
+	padding := m.width - statusLeftWidth - statusRightWidth
+	if padding < 0 {
+		padding = 0
 	}
 
-	info := []string{
-		lipgloss.NewStyle().Bold(true).Render("STATUS"),
-		fmt.Sprintf("Mode: %s", mode),
-		fmt.Sprintf("Messages: %d", len(m.canMessages)),
-		"",
-		lipgloss.NewStyle().Bold(true).Render("FILTER"),
-		fmt.Sprintf("Mode: %s", filterStatus),
-		fmt.Sprintf("IDs: %s", idsBuilder.String()),
-	}
+	finalStatus := lipgloss.JoinHorizontal(lipgloss.Left, statusLeft, strings.Repeat(" ", padding), statusRight)
 
-	return strings.Join(info, "\n")
+	return statusStyle.Width(m.width).Render(finalStatus)
 }
+
+
 
 func (m *Model) canMessageToRow(msg CANMessage) table.Row {
 	cycleTimeMs := float64(msg.CycleTime.Nanoseconds()) / 1e6

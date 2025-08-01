@@ -49,9 +49,85 @@ type Model struct {
 	showHelp      bool
 	showInfo      bool
 	showLogs      bool
+	showDetail    bool
 	infoPanel     info
 	logTable      table.Model
+	detailPanel   detailModel
 	canInterface  string
+}
+
+type detailModel struct {
+	message CANMessage
+	visible bool
+	width   int
+	height  int
+}
+
+func newDetailModel() detailModel {
+	return detailModel{
+		visible: false,
+	}
+}
+
+func (dm detailModel) Init() tea.Cmd {
+	return nil
+}
+
+func (dm detailModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		dm.width = msg.Width
+		dm.height = msg.Height
+	}
+	return dm, nil
+}
+
+func (dm detailModel) View() string {
+	if !dm.visible {
+		return ""
+	}
+
+	contentBuilder := strings.Builder{}
+	contentBuilder.WriteString(detailViewHeaderStyle.Render("Message Details") + "\n\n")
+
+	// ID, DLC, Cycle
+	infoLine := fmt.Sprintf("ID: 0x%03X | DLC: %d | Cycle: %.3fms", dm.message.Frame.ID, dm.message.Frame.Length, float64(dm.message.CycleTime.Nanoseconds())/1e6)
+	contentBuilder.WriteString(infoLine + "\n")
+
+	// Data in Hex
+	hexData := make([]string, len(dm.message.Frame.Data))
+	for i, b := range dm.message.Frame.Data {
+		hexData[i] = fmt.Sprintf("%02X", b)
+	}
+	hexLine := fmt.Sprintf("Data (Hex): %s", strings.Join(hexData, " "))
+	contentBuilder.WriteString(hexLine + "\n")
+
+	// Data in Binary
+	binData := make([]string, len(dm.message.Frame.Data))
+	for i, b := range dm.message.Frame.Data {
+		binData[i] = fmt.Sprintf("%08b", b)
+	}
+
+	// Calculate available content width for binary data (popup is 100% width, but with a small margin)
+	actualPopupWidth := dm.width - 2 // Give it a 1-char margin on each side
+	availableContentWidth := actualPopupWidth - (popupStyle.GetHorizontalPadding() * 2) - (popupStyle.GetHorizontalBorderSize() * 2)
+
+	// Calculate the width if binary data is on one line
+	binaryOneLineContent := fmt.Sprintf("Data (Binary): %s", strings.Join(binData, " "))
+	requiredBinOneLineWidth := lipgloss.Width(binaryOneLineContent)
+
+	if requiredBinOneLineWidth <= availableContentWidth {
+		contentBuilder.WriteString(binaryOneLineContent + "\n")
+	} else {
+		contentBuilder.WriteString("Data (Binary):\n")
+		for _, b := range binData {
+			contentBuilder.WriteString(fmt.Sprintf("  %s\n", b))
+		}
+	}
+
+	detailBox := popupStyle.Width(actualPopupWidth).Height(dm.height - 4).Render(contentBuilder.String())
+
+	return lipgloss.Place(dm.width, dm.height, lipgloss.Center, lipgloss.Center, detailBox)
 }
 
 func initialModel(messages []*SendMessage, canInterface string) Model {
@@ -72,6 +148,7 @@ func initialModel(messages []*SendMessage, canInterface string) Model {
 		sendMessages:  messages,
 		logTable:      table.New(table.WithColumns([]table.Column{})), // Initialize with empty columns
 		canInterface:  canInterface,
+		detailPanel:   newDetailModel(),
 	}
 
 	model.updateSendTable()
@@ -144,6 +221,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.infoPanel.stopChan = make(chan struct{})
 					return m, nil
 				}
+				if m.showDetail {
+					m.showDetail = false
+					return m, nil
+				}
 				// If no popups are open, clear messages and stop cyclic sending
 				m.canMessages = make(map[uint32]CANMessage)
 				m.receiveTable.SetRows([]table.Row{})
@@ -208,6 +289,26 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return m, nil
 			case "d":
+				if m.focus == FocusTop { // Only allow 'd' in receive panel
+					m.showDetail = !m.showDetail
+					if m.showDetail {
+						selectedRow := m.receiveTable.SelectedRow()
+						if selectedRow != nil {
+							idStr := selectedRow[1] // ID is the second column
+							id, err := strconv.ParseUint(strings.TrimPrefix(idStr, "0x"), 16, 32)
+							if err == nil {
+								if msg, ok := m.canMessages[uint32(id)]; ok {
+									m.detailPanel.message = msg
+									m.detailPanel.visible = true
+								}
+							}
+						}
+					} else {
+						m.detailPanel.visible = false
+					}
+				}
+				return m, nil
+			case "backspace", "delete": // New keybinding for deleting send messages
 				if m.focus == FocusBottom {
 					selectedRow := m.sendTable.SelectedRow()
 					if selectedRow != nil {
@@ -293,6 +394,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		m.updateLayout()
+		// Pass the window size message to the detail panel
+		var updatedDetailModel tea.Model
+		var detailCmd tea.Cmd
+		updatedDetailModel, detailCmd = m.detailPanel.Update(msg)
+		m.detailPanel = updatedDetailModel.(detailModel)
+		cmd = tea.Batch(cmd, detailCmd)
 	case CANMessage:
 		if msg.Direction == "RX" && m.canMessages[msg.Frame.ID].SentByApp {
 			return m, waitForCANMessage // Ignore echoed message
@@ -313,6 +420,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		m.canMessages[msg.Frame.ID] = msgToStore
+
+		// Update detail panel if visible and message ID matches
+		if m.showDetail && m.detailPanel.visible && m.detailPanel.message.Frame.ID == msg.Frame.ID {
+			m.detailPanel.message = msgToStore
+		}
 
 		switch m.filterMode {
 		case FilterModeWhitelist:
@@ -410,6 +522,10 @@ func (m Model) View() string {
 
 	if m.showInfo {
 		return m.infoPanel.View(m)
+	}
+
+	if m.showDetail {
+		return m.detailPanel.View()
 	}
 
 	header := headerStyle.Width(m.width).Render("NerdCAN")

@@ -11,4 +11,5 @@ var (
 
 	rxStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("2")) // Green
 	txStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("1")) // Red
+	detailViewHeaderStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("1")).Padding(0, 1).Align(lipgloss.Center)
 )

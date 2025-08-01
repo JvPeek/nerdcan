@@ -21,7 +21,7 @@ type sendMessageJSON struct {
 	Data        []byte `json:"data"`
 }
 
-func saveMessages(messages []*SendMessage) error {
+func saveMessages(messages []*SendMessage) {
 	var jsonMessages []sendMessageJSON
 	for _, msg := range messages {
 		jsonMessages = append(jsonMessages, sendMessageJSON{
@@ -35,10 +35,14 @@ func saveMessages(messages []*SendMessage) error {
 
 	data, err := json.MarshalIndent(jsonMessages, "", "  ")
 	if err != nil {
-		return err
+		Log(ERROR, "Error marshaling messages to JSON: %v", err)
+		return
 	}
 
-	return ioutil.WriteFile(messagesFileName, data, 0644)
+	err = ioutil.WriteFile(messagesFileName, data, 0644)
+	if err != nil {
+		Log(ERROR, "Error writing messages to file: %v", err)
+	}
 }
 
 func loadMessages() ([]*SendMessage, error) {
@@ -60,7 +64,7 @@ func loadMessages() ([]*SendMessage, error) {
 	for _, jsonMsg := range jsonMessages {
 		u, err := uuid.Parse(jsonMsg.UUID)
 		if err != nil {
-			// Handle error or skip message if UUID is invalid
+			Log(WARNING, "Skipping message with invalid UUID: %s", jsonMsg.UUID)
 			continue
 		}
 		messages = append(messages, &SendMessage{

@@ -48,10 +48,13 @@ type Model struct {
 	form          form
 	showHelp      bool
 	showInfo      bool
+	showLogs      bool
 	infoPanel     info
+	logTable      table.Model
+	canInterface  string
 }
 
-func initialModel(messages []*SendMessage) Model {
+func initialModel(messages []*SendMessage, canInterface string) Model {
 	receiveTable := newReceiveTable()
 	sendTable := newSendTable()
 
@@ -67,6 +70,8 @@ func initialModel(messages []*SendMessage) Model {
 		showInfo:      false,
 		infoPanel:     newInfo(),
 		sendMessages:  messages,
+		logTable:      table.New(table.WithColumns([]table.Column{})), // Initialize with empty columns
+		canInterface:  canInterface,
 	}
 
 	model.updateSendTable()
@@ -114,11 +119,27 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 				}
 				return m, nil
+			case "L":
+				m.showLogs = !m.showLogs
+				return m, nil
 			case "esc":
 				if m.showHelp {
 					m.showHelp = false
 					return m, nil
 				}
+				if m.showLogs {
+					m.showLogs = false
+					return m, nil
+				}
+				if m.showInfo {
+					m.showInfo = false
+					// Stop the bus load monitor goroutine
+					close(m.infoPanel.stopChan)
+					// Re-initialize the stop channel for the next time it's opened
+					m.infoPanel.stopChan = make(chan struct{})
+					return m, nil
+				}
+				// If no popups are open, clear messages and stop cyclic sending
 				m.canMessages = make(map[uint32]CANMessage)
 				m.receiveTable.SetRows([]table.Row{})
 				for _, msg := range m.sendMessages {
@@ -246,10 +267,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 								msg.Sending = false
 							} else {
 								msg.Sending = true
-								go sendCyclic(msg)
+								go sendCyclic(msg, m.canInterface)
 							}
 						} else {
-							go sendOnce(msg)
+							go sendOnce(msg, m.canInterface)
 						}
 						m.updateSendTable()
 					}
@@ -346,6 +367,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	if m.form.focused > -1 {
 		return updateForm(m, msg)
+	} else if m.showLogs {
+		m.logTable, cmd = m.logTable.Update(msg)
 	} else if m.focus == FocusTop {
 		m.receiveTable, cmd = m.receiveTable.Update(msg)
 	} else {
@@ -374,6 +397,10 @@ func (m Model) View() string {
 
 	if m.showHelp {
 		return m.renderHelpView()
+	}
+
+	if m.showLogs {
+		return m.renderErrorView()
 	}
 
 	if m.showInfo {

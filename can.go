@@ -37,12 +37,13 @@ type SendMessage struct {
 // A chan to receive CAN messages.
 var canMsgCh = make(chan CANMessage)
 
-func listenForCANCtrl() {
-	conn, err := socketcan.DialContext(context.Background(), "can", "can0")
+func listenForCANCtrl(canInterface string) {
+	conn, err := socketcan.DialContext(context.Background(), "can", canInterface)
 	if err != nil {
-		// In a real app, you'd send this error to the model to display.
+		Log(ERROR, "Failed to open CAN interface '%s': %v", canInterface, err)
 		return
 	}
+	Log(INFO, "Successfully opened CAN interface '%s'", canInterface)
 	defer conn.Close()
 
 	receiver := socketcan.NewReceiver(conn)
@@ -57,9 +58,9 @@ func waitForCANMessage() tea.Msg {
 	return <-canMsgCh
 }
 
-func sendOnce(msg *SendMessage) {
+func sendOnce(msg *SendMessage, canInterface string) {
 	msg.TriggerType = "manual"
-	conn, err := socketcan.DialContext(context.Background(), "can", "can0")
+	conn, err := socketcan.DialContext(context.Background(), "can", canInterface)
 	if err != nil {
 		return
 	}
@@ -71,9 +72,9 @@ func sendOnce(msg *SendMessage) {
 	canMsgCh <- CANMessage{Frame: frame, Timestamp: time.Now(), Direction: "TX", SentByApp: true, CycleTime: 0}
 }
 
-func sendCyclic(msg *SendMessage) {
+func sendCyclic(msg *SendMessage, canInterface string) {
 	msg.TriggerType = "timer"
-	conn, err := socketcan.DialContext(context.Background(), "can", "can0")
+	conn, err := socketcan.DialContext(context.Background(), "can", canInterface)
 	if err != nil {
 		return
 	}

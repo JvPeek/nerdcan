@@ -44,6 +44,8 @@ type LogEntry struct {
 var (
 	logMutex    sync.Mutex
 	logMessages []LogEntry
+	newErrorFlag      bool // New global flag to indicate new errors
+	newErrorFlagMutex sync.Mutex // Mutex for newErrorFlag
 )
 
 // Log logs a message with the given level, automatically capturing file and line number.
@@ -70,6 +72,12 @@ func logInternal(level LogLevel, skip int, format string, a ...interface{}) {
 		Line:    line,
 		Message: fmt.Sprintf(format, a...),
 	})
+
+	if level >= ERROR {
+		newErrorFlagMutex.Lock()
+		newErrorFlag = true
+		newErrorFlagMutex.Unlock()
+	}
 }
 
 func GetLogs() []LogEntry {

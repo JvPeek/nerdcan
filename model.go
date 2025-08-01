@@ -121,6 +121,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			case "L":
 				m.showLogs = !m.showLogs
+				if m.showLogs {
+					newErrorFlagMutex.Lock()
+					newErrorFlag = false
+					newErrorFlagMutex.Unlock()
+				}
 				return m, nil
 			case "esc":
 				if m.showHelp {
@@ -492,7 +497,12 @@ func (m *Model) renderStatusBar() string {
 	}
 
 	statusLeft := fmt.Sprintf(" %s | %d msgs | Filter: %s", mode, len(m.canMessages), filterStatus)
-	statusRight := "? for help "
+
+	errorIndicator := ""
+	if m.hasNewErrorLogs() && !m.showLogs {
+		errorIndicator = " 💣"
+	}
+	statusRight := fmt.Sprintf("? for help%s", errorIndicator)
 
 	statusLeftWidth := lipgloss.Width(statusLeft)
 	statusRightWidth := lipgloss.Width(statusRight)
@@ -507,6 +517,11 @@ func (m *Model) renderStatusBar() string {
 	return statusStyle.Width(m.width).Render(finalStatus)
 }
 
+func (m *Model) hasNewErrorLogs() bool {
+	newErrorFlagMutex.Lock()
+	defer newErrorFlagMutex.Unlock()
+	return newErrorFlag
+}
 
 
 func (m *Model) canMessageToRow(msg CANMessage) table.Row {

@@ -8,3 +8,5 @@ nerdcan
 .vscode/
 .idea/
 messages.json
+bin/
+

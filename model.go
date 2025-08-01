@@ -498,11 +498,10 @@ func (m *Model) renderStatusBar() string {
 
 	statusLeft := fmt.Sprintf(" %s | %d msgs | Filter: %s", mode, len(m.canMessages), filterStatus)
 
-	errorIndicator := ""
+	statusRight := "? for help"
 	if m.hasNewErrorLogs() && !m.showLogs {
-		errorIndicator = " 💣"
+		statusRight = "Error, press Shift+L"
 	}
-	statusRight := fmt.Sprintf("? for help%s", errorIndicator)
 
 	statusLeftWidth := lipgloss.Width(statusLeft)
 	statusRightWidth := lipgloss.Width(statusRight)

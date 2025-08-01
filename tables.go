@@ -17,7 +17,6 @@ func newReceiveTable() table.Model {
 
 	receiveTable := table.New(
 		table.WithColumns(receiveColumns),
-		table.WithFocused(true),
 	)
 
 	receiveStyles := table.DefaultStyles()

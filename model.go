@@ -61,7 +61,7 @@ func initialModel(messages []*SendMessage) Model {
 		canMessages:   make(map[uint32]CANMessage),
 		filteredIDs:   make(map[uint32]struct{}),
 		overwriteMode: true, // Default to overwrite mode
-		focus:         FocusTop,
+		focus:         FocusBottom,
 		form:          newForm("", "", "", ""),
 		showHelp:      false,
 		showInfo:      false,
@@ -70,6 +70,8 @@ func initialModel(messages []*SendMessage) Model {
 	}
 
 	model.updateSendTable()
+	model.sendTable.Focus()
+	model.receiveTable.Blur()
 	return model
 }
 
